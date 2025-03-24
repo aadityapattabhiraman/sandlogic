@@ -6,7 +6,11 @@ from typing import Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import AzureChatOpenAI
 from typing_extensions import TypedDict
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_tavily import TavilySearch
+from langgraph.prebuilt import create_react_agent
+from pydantic import BaseModel, Field
 
 
 
@@ -24,6 +28,14 @@ class State(TypedDict):
     message: str
     next_node: str
 
+
+class Output(BaseModel):
+
+    name: str = Field(description="The name under which reservation is done")
+    location: str = Field(description="The preferred location")
+    number_of_guests: str = Field(description="The number of guests")
+    cuisine: str = Field(description="Preferred cuisine")
+    occation: str = Field(description="Occation of the event")
 
 
 def greeting(state: State):
@@ -77,27 +89,92 @@ def initial(state: State):
 
 def reserve(state: State):
 
+    history = []
     prompt = """
     You are a responsible AI assistant who is specialized in creating a
     reservation for a user based on their location, cuisine preference,
-    name, number of guests and availablity. Ask relevant questions for the purpose.
-    Your output should be of format:
-    {
+    name, number of guests, occation(optional) and availablity. Ask relevant questions for the purpose.
+    After collecting all the info also confirm the information with the user.
+    Once the conversation is completed you output should be "<<DONE>>".
+    Do not mentiaon anything related to the status of reservation.
+    Your final output once the conversation is completed should be of format:
+
+    <<DONE>>
     "name": name,
     "location": location,
     "cuisine": cuisine,
     "number_of_guests": number of guests,
-    }
+    "occation": occation,
+
     """
 
+    prompt_template = ChatPromptTemplate([
+        ("system", prompt),
+        MessagesPlaceholder("message")
+    ])
+
+    prompt = prompt_template.invoke({"message": history})
+
     response = model.invoke(prompt)
-    print(response)
-    return {"message": "les see reserve"}
+    print(response.content)
+
+    while "<<DONE>>" not in response.content:
+        history.append(AIMessage(response.content))
+        user = input(">>> ")
+        history.append(HumanMessage(user))
+        prompt = prompt_template.invoke({"message": history})
+        response = model.invoke(prompt)
+
+        if "<<DONE>>" not in response.content:
+            print(response.content)
+
+        else:
+            model_with_tools = model.bind_tools([Output])
+            data = model_with_tools.invoke(response.content).tool_calls[0]["args"]
+
+    tool = TavilySearch(
+        max_results=1,
+        topic="general",
+    )
+
+    search = f"give me 1 {data['cuisine']} restaturant name in {data['location']} for {data['occation']} occation. Do not include any links"
+    agent = create_react_agent(model, [tool])
+
+    for step in agent.stream(
+        {"messages": search},
+        stream_mode="values",
+    ):
+        response = step["messages"][-1]
+
+    new = []
+    pro = f"""
+    You are a helpful assistant that is specialized in a restaurant suggestion
+    Ask the user whether they would like to try the restaurant or not.
+    If yes then respond only with "yes" else "no".
+    {response.content}
+    """
+    prompt_template = ChatPromptTemplate([
+        ("system", pro),
+        MessagesPlaceholder("message")
+    ])
+
+    while True:
+        prompt = prompt_template.invoke({"message": new})
+        response = model.invoke(prompt)
+        new.append(AIMessage(content=response.content))
+        if response.content in ["yes", "no"]:
+            break
+        print(response.content)
+        book = input(">>> ")
+        new.append(HumanMessage(content=book))
+
+    print(model.invoke("Say that reservation has been confirmed").content)
+
+    return {"message": response.content, "data": data}
 
 
 
 def modify(state: State):
-
     print(state)
     return {"message": "les see modify"}
 
@@ -121,6 +198,5 @@ workflow.add_edge("modify", END)
 graph = workflow.compile()
 
 response = graph.invoke({"query": "hello, i would like to do a reservation"})
-print(response["message"])
-response = graph.invoke({"query": "hello, i would like to change my reservation"})
-print(response["message"])
+# response = graph.invoke({"query": "hello, i would like to change my reservation"})
+# print(response["message"])
