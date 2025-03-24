@@ -36,6 +36,20 @@ class Output(BaseModel):
     number_of_guests: str = Field(description="The number of guests")
     cuisine: str = Field(description="Preferred cuisine")
     occation: str = Field(description="Occation of the event")
+    date: int = Field(description="date of month of the reservation")
+
+
+class Mody(BaseModel):
+
+    name: str = Field(description="The name under which reservation is done")
+    number_of_guests: str = Field(description="The number of guests")
+    restaurant: str = Field(description="Restaurant name")
+    date: int = Field(description="day of the month of reservation")
+
+
+class Resto(BaseModel):
+
+    name: str = Field(description="The name of restaurant")
 
 
 def greeting(state: State):
@@ -93,7 +107,7 @@ def reserve(state: State):
     prompt = """
     You are a responsible AI assistant who is specialized in creating a
     reservation for a user based on their location, cuisine preference,
-    name, number of guests, occation(optional) and availablity. Ask relevant questions for the purpose.
+    name, number of guests, date, occation(optional) and availablity. Ask relevant questions for the purpose.
     After collecting all the info also confirm the information with the user.
     Once the conversation is completed you output should be "<<DONE>>".
     Do not mentiaon anything related to the status of reservation.
@@ -105,6 +119,7 @@ def reserve(state: State):
     "cuisine": cuisine,
     "number_of_guests": number of guests,
     "occation": occation,
+    "date": date,
 
     """
 
@@ -146,6 +161,9 @@ def reserve(state: State):
     ):
         response = step["messages"][-1]
 
+
+    model_with_tools = model.bind_tools([Resto])
+    data["restaurant"] = model_with_tools.invoke(response.content).tool_calls[0]["args"]["name"]
     new = []
     pro = f"""
     You are a helpful assistant that is specialized in a restaurant suggestion
@@ -175,8 +193,53 @@ def reserve(state: State):
 
 
 def modify(state: State):
-    print(state)
-    return {"message": "les see modify"}
+
+    data = {}
+    history = []
+    prompt = """
+    You are a responsible AI assistant who is specialized in changing a
+    reservation for a user based on their restaurant name, date,
+    name for reservation, number of guests. Ask relevant questions for the purpose.
+    After collecting all the info also confirm the information with the user.
+    Once the conversation is completed you output should be "<<DONE>>".
+    Do not mentiaon anything related to the status of reservation.
+    Your final output once the conversation is completed should be of format:
+
+    <<DONE>>
+    "name": name,
+    "restaurant": restaurant,
+    "number_of_guests": number of guests,
+    "date": date,
+
+    """
+
+    prompt_template = ChatPromptTemplate([
+        ("system", prompt),
+        MessagesPlaceholder("message")
+    ])
+
+    prompt = prompt_template.invoke({"message": history})
+
+    response = model.invoke(prompt)
+    print(response.content)
+
+    while "<<DONE>>" not in response.content:
+        history.append(AIMessage(response.content))
+        user = input(">>> ")
+        history.append(HumanMessage(user))
+        prompt = prompt_template.invoke({"message": history})
+        response = model.invoke(prompt)
+
+        if "<<DONE>>" not in response.content:
+            print(response.content)
+
+        else:
+            model_with_tools = model.bind_tools([Mody])
+            data = model_with_tools.invoke(response.content).tool_calls[0]["args"]
+
+    print(model.invoke("Tell them that the reservation has been modified").content)
+
+    return {"message": response.content, "data": data}
 
 
 
@@ -198,5 +261,4 @@ workflow.add_edge("modify", END)
 graph = workflow.compile()
 
 response = graph.invoke({"query": "hello, i would like to do a reservation"})
-# response = graph.invoke({"query": "hello, i would like to change my reservation"})
-# print(response["message"])
+response = graph.invoke({"query": "hello, i would like to change my reservation"})
