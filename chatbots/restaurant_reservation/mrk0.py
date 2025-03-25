@@ -21,7 +21,6 @@ model = AzureChatOpenAI(
 )
 
 
-
 class State(TypedDict):
 
     query: str
@@ -103,15 +102,18 @@ def initial(state: State):
 
 def reserve(state: State):
 
+    availablity = True
     history = []
     prompt = """
     You are a responsible AI assistant who is specialized in creating a
     reservation for a user based on their location, cuisine preference,
-    name, number of guests, date, occation(optional) and availablity. Ask relevant questions for the purpose.
-    After collecting all the info also confirm the information with the user.
-    Once the conversation is completed you output should be "<<DONE>>".
-    Do not mentiaon anything related to the status of reservation.
-    Your final output once the conversation is completed should be of format:
+    name, number of guests, date, occation(optional) and availablity.
+    Ask relevant questions for the purpose. After collecting all the
+    info also confirm the information with the user. Once the
+    conversation is completed you output should be "<<DONE>>". Do not
+    mention anything related to the status of reservation. Try not to
+    sound like a robot. Your final output once the conversation is
+    completed should be of format:
 
     <<DONE>>
     "name": name,
@@ -186,7 +188,12 @@ def reserve(state: State):
         book = input(">>> ")
         new.append(HumanMessage(content=book))
 
-    print(model.invoke("Say that reservation has been confirmed").content)
+    while True:
+        print(model.invoke(f"Say that reservation has been confirmed if {availablity} is True else say not available for the day and ask for a different day").content)
+        if availablity is True:
+            break
+        availablity = True
+
 
     return {"message": response.content, "data": data}
 
@@ -194,6 +201,7 @@ def reserve(state: State):
 
 def modify(state: State):
 
+    availablity = False
     data = {}
     history = []
     prompt = """
@@ -237,8 +245,13 @@ def modify(state: State):
             model_with_tools = model.bind_tools([Mody])
             data = model_with_tools.invoke(response.content).tool_calls[0]["args"]
 
-    print(model.invoke("Tell them that the reservation has been modified").content)
+    while True:
 
+        print(model.invoke(f"Tell them that the reservation has been modified if {availablity} is 'True' if not ask them to pick a different date").content)
+        if availablity is True:
+            break
+        availablity = True
+        date = input(">>> ")
     return {"message": response.content, "data": data}
 
 
