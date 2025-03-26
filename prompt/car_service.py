@@ -87,15 +87,22 @@ You: It's a Bugatti.
 Me: Can you please tell me your car's model?
 You: It's a Chiron Super Sport.
 
-ME: Can you please tell me your model year?
+Me: Can you please tell me your model year?
 You: It's a 2019 one.
+
 Me: Great! What kind of service does your Bugatti Chiron Super Sport
     need? (e.g. routine maintenance, oil change, repairs)
 You: Just a routine maintenance check.
 
+Me: Would you like any other services? (e.g Custom Performance Improvement)
+You: No.
+
 Me: Okay! Can you please provide me with your location and preferred
     date and time for the service?
-You: I'm in Mumbai and would like to schedule it for this Saturday.
+You: I would like to schedule it for this Saturday.
+
+Me: Which service center would you prefer?
+You: I would prefer the one in koramangala.
 
 Me: Alright! This Saturday, got it. What time works best for you?
     Morning (9:00 AM - 12:00 PM) or afternoon (1:00 PM - 4:00 PM)?
