@@ -1,24 +1,16 @@
 #!/home/akugyo/Programs/Python/chatbots/bin/python
 
 import os
-import random
-from typing import Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import AzureChatOpenAI
 from typing_extensions import TypedDict
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
+from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_tavily import TavilySearch
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
-
-
-model = AzureChatOpenAI(
-    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-    azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
-    openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
-)
 
 
 class State(TypedDict):
@@ -102,6 +94,7 @@ def initial(state: State):
 
 def reserve(state: State):
 
+    print(state)
     availablity = True
     history = []
     prompt = """
@@ -179,11 +172,14 @@ def reserve(state: State):
     ])
 
     while True:
+
         prompt = prompt_template.invoke({"message": new})
         response = model.invoke(prompt)
         new.append(AIMessage(content=response.content))
-        if response.content in ["yes", "no"]:
+
+        if response.content.lower() in ["yes", "no"]:
             break
+
         print(response.content)
         book = input(">>> ")
         new.append(HumanMessage(content=book))
@@ -201,9 +197,11 @@ def reserve(state: State):
 
 def modify(state: State):
 
+    print(state)
     availablity = False
     data = {}
     history = []
+
     prompt = """
     You are a responsible AI assistant who is specialized in changing a
     reservation for a user based on their restaurant name, date,
@@ -218,7 +216,6 @@ def modify(state: State):
     "restaurant": restaurant,
     "number_of_guests": number of guests,
     "date": date,
-
     """
 
     prompt_template = ChatPromptTemplate([
@@ -232,8 +229,10 @@ def modify(state: State):
     print(response.content)
 
     while "<<DONE>>" not in response.content:
+
         history.append(AIMessage(response.content))
         user = input(">>> ")
+
         history.append(HumanMessage(user))
         prompt = prompt_template.invoke({"message": history})
         response = model.invoke(prompt)
@@ -248,30 +247,44 @@ def modify(state: State):
     while True:
 
         print(model.invoke(f"Tell them that the reservation has been modified if {availablity} is 'True' if not ask them to pick a different date").content)
+
         if availablity is True:
             break
+
         availablity = True
         date = input(">>> ")
+
     return {"message": response.content, "data": data}
 
 
 
-workflow = StateGraph(State)
 
-workflow.add_node("greeting", greeting)
-workflow.add_node("initial", initial)
-workflow.add_node("new", reserve)
-workflow.add_node("modify", modify)
 
-workflow.add_edge(START, "greeting")
-workflow.add_edge("greeting", "initial")
-workflow.add_conditional_edges("initial", lambda state: state["next_node"],
-    ["new", "modify", END])
+if __name__ == "__main__":
 
-workflow.add_edge("new", END)
-workflow.add_edge("modify", END)
+    model = AzureChatOpenAI(
+        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+        openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+    )
 
-graph = workflow.compile()
+    workflow = StateGraph(State)
 
-response = graph.invoke({"query": "hello, i would like to do a reservation"})
-response = graph.invoke({"query": "hello, i would like to change my reservation"})
+    workflow.add_node("greeting", greeting)
+    workflow.add_node("initial", initial)
+    workflow.add_node("new", reserve)
+    workflow.add_node("modify", modify)
+
+    workflow.add_edge(START, "greeting")
+    workflow.add_edge("greeting", "initial")
+    workflow.add_conditional_edges("initial", lambda state: state["next_node"],
+        ["new", "modify", END])
+
+    workflow.add_edge("new", END)
+    workflow.add_edge("modify", END)
+
+    graph = workflow.compile()
+
+    response = graph.invoke({"query": "hello, i would like to do a reservation"})
+    print(response)
+    response = graph.invoke({"query": "hello, i would like to change my reservation"})
