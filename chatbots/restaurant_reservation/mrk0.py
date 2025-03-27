@@ -12,6 +12,7 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
 
+
 class State(TypedDict):
 
     query: str
@@ -48,7 +49,6 @@ def greeting(state: State):
 
     print("Hi. I am a assistant designed to schedule or modify existing restaturant reservation.")
     return state
-
 
 
 def initial(state: State):
