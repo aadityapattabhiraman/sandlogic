@@ -76,7 +76,7 @@ def initial(state: State):
 
     for _ in range(3):
 
-        response = model.invoke(prompt_template.invoke({"user_input": state["query"]}))
+        response = model.invoke(prompt_template.invoke({"user_input": input(">>> ")}))
         if response.content in ["new", "modify"]:
             break
 
@@ -92,7 +92,150 @@ def initial(state: State):
     return {"next_node": response.content}
 
 
+def guess(state: State):
 
+    prompt = """
+    You are a helpful AI assistant who is specialized in asking the user
+    whether the person has a restaurant name in mind or whether they
+    would like some suggestions.
+    """
+    print(model.invoke(prompt).content)
+
+    prompt = """You are an assistant that classifies user input into
+    either "suggestion" or "no_suggestion".
+    Your response should be limited to either "suggestion" or "no_suggestion".
+
+    User: Barbeque nation.
+    AI: no_suggestion
+
+    User: McDonalds 
+    AI: no_suggestion 
+
+    User: I would like you to suggest. 
+    AI: suggestion 
+
+    User: {user_input}
+    AI:
+    """
+
+    prompt_template = PromptTemplate.from_template(prompt)
+
+    for _ in range(3):
+
+        user_input = input(">>> ")
+        response = model.invoke(prompt_template.invoke({"user_input": user_input}))
+        if response.content in ["suggestion", "no_suggestion"]:
+            break
+
+        reg = "I am an assistant designed to schedule restaurant reservations"
+        print(reg)
+        state["query"] = input(">>> ")
+
+    else:
+
+        print("Stop WASTING computation resources")
+        exit()
+
+    return {"next_node": response.content, "message": user_input}
+   
+def no_suggestion(state: State):
+
+    history = []
+    prompt = """
+    You are a responsible AI assistant who is specialized in creating a
+    reservation for a user based on their restaurant name, branch name, name for reservation,
+    number of guests, date, occation(optional), time and availablity.
+    Do NOT say that there is no availablity. Your job is to only take the information.
+    Ask relevant questions for the purpose. After collecting all the
+    info also confirm the information with the user. Once the
+    conversation is completed you output should be "<<DONE>>". Do not
+    mention anything related to the status of reservation. Try not to
+    sound like a robot. Your final output once the conversation is
+    completed should be of format:
+
+    <<DONE>>
+    "restaurant": restaurant,
+    "name": name,
+    "location": location,
+    "number_of_guests": number of guests,
+    "occation": occation,
+    "date": date,
+    "time": time,
+    """
+
+    history.append(HumanMessage(content=state["message"]))
+    prompt_template = ChatPromptTemplate([
+        ("system", prompt),
+        MessagesPlaceholder("message")
+    ])
+
+    prompt = prompt_template.invoke({"message": history})
+
+    response = model.invoke(prompt)
+    print(response.content)
+
+    while "<<DONE>>" not in response.content:
+
+        history.append(AIMessage(response.content))
+        user = input(">>> ")
+
+        history.append(HumanMessage(user))
+        prompt = prompt_template.invoke({"message": history})
+        response = model.invoke(prompt)
+
+        if "<<DONE>>" not in response.content:
+            print(response.content)
+
+        else:
+            model_with_tools = model.bind_tools([Output])
+            data = model_with_tools.invoke(response.content).tool_calls[0]["args"]
+
+    pro = """
+    You are a helpful AI assistant that is specialized in scheduling
+    restaurant reservation. The reservation has been confirmed only
+    if the time {current_timeframe} is "Available" else "Reservation
+    is not available for the selected time" and give {current_timeframe}
+    so that the user can select from that. If the reservation is
+    available then inform them regarding it. Else inform otherwise
+
+    For example:
+    Let me say the time to schedule is 12 pm, when you cross reference
+    the time to {current_timeframe} it says "Booked" so i cannot accept
+    the reservation.
+    I will give the output of {current_timeframe} whose value is
+    "Available", then ask the user to select a time from the given time.
+    """
+
+    prompt_template = ChatPromptTemplate([
+        ("system", pro),
+        MessagesPlaceholder("message")
+    ])
+
+    while True:
+
+        prompt = prompt_template.invoke({"message": history, "current_timeframe": current_timeframe})
+        breaking = model.invoke(prompt).content
+        print(breaking)
+        history.append(AIMessage(content=breaking))
+
+        breaker = model.invoke(f"""
+        You are a responsible AI assistant that classifies user input as
+        "yes" or "no". Your output can only be "yes" or "no". It is "yes"
+        when the reservation is confirmed else it is "no"
+
+        User: {breaking}
+        """).content
+
+        if breaker.lower() == "yes":
+            break
+
+        new_inp = input(">>> ")
+        history.append(HumanMessage(content=new_inp))
+
+    state["message"] = response.content
+    state["data"] = data
+    return {"message": response.content, "data": data}
+   
 def reserve(state: State):
 
     history = []
@@ -206,13 +349,12 @@ def reserve(state: State):
         MessagesPlaceholder("message")
     ])
 
-    new = []
     while True:
 
-        prompt = prompt_template.invoke({"message": new, "current_timeframe": current_timeframe})
+        prompt = prompt_template.invoke({"message": history, "current_timeframe": current_timeframe})
         breaking = model.invoke(prompt).content
         print(breaking)
-        new.append(AIMessage(content=breaking))
+        history.append(AIMessage(content=breaking))
 
         breaker = model.invoke(f"""
         You are a responsible AI assistant that classifies user input as
@@ -226,7 +368,7 @@ def reserve(state: State):
             break
 
         new_inp = input(">>> ")
-        new.append(HumanMessage(content=new_inp))
+        history.append(HumanMessage(content=new_inp))
 
     state["message"] = response.content
     state["data"] = data
@@ -244,10 +386,10 @@ def modify(state: State):
     name for reservation, number of guests. Ask relevant questions for the purpose.
     Also ask the time that it has to be changed it to.
     After collecting all the info also confirm the information with the user.
-    Once the conversation is completed you output should be "<<DONE>>".
     Do not mention anything related to the status of reservation.
     Try NOT to sound like a robot.
-    Your final output once the conversation is completed should be of format:
+    Once you have all the info confirm it with the user. Once confirmed
+    your final output should be of format:
 
     <<DONE>>
     "name": name,
@@ -287,8 +429,8 @@ def modify(state: State):
     pro = """
     You are a helpful AI assistant that is specialized in modifying
     restaurant reservation. The reservation can be confirmed only
-    when the time requested by user {current_timeframe} is "Available" else "Reservation
-    is not available for the selected time" and give {current_timeframe}
+    when the time requested by user {current_timeframe} is "Available" else the
+    reservation cannot be confirmed at that particular time and give {current_timeframe}
     so that the user can select from that. If the reservation is
     available then inform them regarding it. Else inform otherwise
 
@@ -348,20 +490,28 @@ if __name__ == "__main__":
 
     workflow.add_node("greeting", greeting)
     workflow.add_node("initial", initial)
-    workflow.add_node("new", reserve)
+    workflow.add_node("new", guess)
     workflow.add_node("modify", modify)
+    workflow.add_node("suggestion", reserve)
+    workflow.add_node("no_suggestion", no_suggestion)
 
     workflow.add_edge(START, "greeting")
     workflow.add_edge("greeting", "initial")
     workflow.add_conditional_edges("initial", lambda state: state["next_node"],
-        ["new", "modify", END])
+        ["new", "modify"])
 
-    workflow.add_edge("new", END)
-    workflow.add_edge("modify", END)
+    workflow.add_conditional_edges("new", lambda state: state["next_node"],
+                                   ["no_suggestion", "suggestion"])
+    workflow.add_edge("no_suggestion", END)
+    workflow.add_edge("suggestion", END)
 
     graph = workflow.compile()
 
     # response = graph.invoke({"query": "hello, i would like to do a reservation"})
     # print(response)
-    response = graph.invoke({"query": "hello, i would like to change my reservation"})
-    print(response)
+    # response = graph.invoke({"query": "hello, i would like to change my reservation"})
+    # print(response)
+
+    while True:
+
+        response = graph.invoke({})
