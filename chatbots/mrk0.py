@@ -19,4 +19,6 @@ class LLM:
 
 if __name__ == "__main__":
 
-    print(LLM().run(["I am a helpful ai assistant"]))
+    model = LLM()
+    prompt = [{"role": "user", "content": "Hello, I need help with a math problem."}]
+    print(model.run(prompt))
