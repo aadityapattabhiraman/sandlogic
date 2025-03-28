@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
-
+from langchain_openai.chat_models.azure import AzureChatOpenAI
 
 
 class State(TypedDict):
@@ -15,6 +15,8 @@ class State(TypedDict):
     message: str
     next_node: str
     data: dict
+    model: AzureChatOpenAI
+    current_timeframe: dict
 
 
 

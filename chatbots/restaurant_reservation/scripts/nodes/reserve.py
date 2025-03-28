@@ -1,39 +1,28 @@
 #!/usr/bin/env python3
 
-from ..classes import State, Output, Resto
+import sys
+sys.path.insert(0, '../')
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.prompts import MessagesPlaceholder
 from langchain_tavily import TavilySearch
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
+from classes import State, Output, Resto
+from prompts import user_input_new_suggestion, scheduling_prompt
 
 
 
-def get_user_data():
+def get_user_data(prompt, model, additional_info=None):
+
+    """
+    Gets the user data to make a new reservation
+    """
 
     history = []
+    if additional_info != None:
+        history.append(HumanMessage(content=additional_info))
     data = {}
 
-    prompt = """
-    You are a responsible AI assistant who is specialized in creating a
-    reservation for a user based on their location, cuisine preference,
-    name, number of guests, date, occation(optional), time and availablity.
-    Ask relevant questions for the purpose. After collecting all the
-    info also confirm the information with the user. Once the
-    conversation is completed you output should be "<<DONE>>". Do not
-    mention anything related to the status of reservation. Try not to
-    sound like a robot. Your final output once the conversation is
-    completed should be of format:
-
-    <<DONE>>
-    "name": name,
-    "location": location,
-    "cuisine": cuisine,
-    "number_of_guests": number of guests,
-    "occation": occation,
-    "date": date,
-    "time": time,
-    """
 
     prompt_template = ChatPromptTemplate([
         ("system", prompt),
@@ -61,10 +50,10 @@ def get_user_data():
             model_with_tools = model.bind_tools([Output])
             data = model_with_tools.invoke(response.content).tool_calls[0]["args"]
 
-    return data
+    return history, data
 
 
-def tavily_search(data: dict):
+def tavily_search(data: dict, model):
 
     tool = TavilySearch(
         max_results=1,
@@ -87,7 +76,7 @@ def tavily_search(data: dict):
     return response
 
 
-def get_resto_name(response, data):
+def get_resto_name(response, data, model):
 
     model_with_tools = model.bind_tools([Resto])
     data["restaurant"] = model_with_tools.invoke(response.content).tool_calls[0]["args"]["name"]
@@ -95,7 +84,7 @@ def get_resto_name(response, data):
     return data
 
 
-def try_hotel_or_not(data: dict):
+def try_hotel_or_not(data: dict, model):
 
     new = []
     pro = f"""
@@ -125,36 +114,19 @@ def try_hotel_or_not(data: dict):
     return response
 
 
-def reservation(current_timeframe: dict):
+def scheduling(current_timeframe: dict, history: list, prompt: str, model):
     
-    pro = """
-    You are a helpful AI assistant that is specialized in scheduling
-    restaurant reservation. The reservation has been confirmed only
-    if the time {current_timeframe} is "Available" else "Reservation
-    is not available for the selected time" and give {current_timeframe}
-    so that the user can select from that. If the reservation is
-    available then inform them regarding it. Else inform otherwise
-
-    For example:
-    Let me say the time to schedule is 12 pm, when you cross reference
-    the time to {current_timeframe} it says "Booked" so i cannot accept
-    the reservation.
-    I will give the output of {current_timeframe} whose value is
-    "Available", then ask the user to select a time from the given time.
-    """
-
     prompt_template = ChatPromptTemplate([
-        ("system", pro),
+        ("system", prompt),
         MessagesPlaceholder("message")
     ])
 
-    new = []
     while True:
 
-        prompt = prompt_template.invoke({"message": new, "current_timeframe": current_timeframe})
+        prompt = prompt_template.invoke({"message": history, "current_timeframe": current_timeframe})
         breaking = model.invoke(prompt).content
         print(breaking)
-        new.append(AIMessage(content=breaking))
+        history.append(AIMessage(content=breaking))
 
         breaker = model.invoke(f"""
         You are a responsible AI assistant that classifies user input as
@@ -168,7 +140,7 @@ def reservation(current_timeframe: dict):
             break
 
         new_inp = input(">>> ")
-        new.append(HumanMessage(content=new_inp))
+        history.append(HumanMessage(content=new_inp))
 
     return breaking
 
@@ -176,12 +148,14 @@ def reservation(current_timeframe: dict):
 
 def reserve(state: State):
 
-    data = get_user_data()
-    response = tavily_search(data)
-    data = get_resto_name(response, data)
-    resto_response = try_hotel_or_not(data)
-    message = reservation(current_timeframe)
+    model = state["model"]
+    history, data = get_user_data(user_input_new_suggestion, model)
+    response = tavily_search(data, model)
+    data = get_resto_name(response, data, model)
+    resto_response = try_hotel_or_not(data, model)
+    message = scheduling(state["current_timeframe"], history, scheduling_prompt, model)
     state["message"] = message
     state["data"] = data
 
     return state
+

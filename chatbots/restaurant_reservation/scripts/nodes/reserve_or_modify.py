@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 
+import sys
+sys.path.insert(0, '../')
 from langchain_core.prompts import PromptTemplate
-from ..classes import State
+from classes import State
 
 
 
-def initial(state: State):
+def new_or_modify(state: State):
+
+    """
+    A node which uses conditional edge to send user to create new reservation
+    or modify existing reservation
+    """
 
     prompt = """You are an assistant that classifies user input into
     either "new" or "modify" or "undefined".
@@ -30,13 +37,18 @@ def initial(state: State):
 
     for _ in range(3):
 
-        response = model.invoke(prompt_template.invoke({"user_input": state["query"]}))
+        state["query"] = input(">>> ")
+
+        response = state["model"].invoke(prompt_template.invoke(
+            {"user_input": state["query"]}
+        ))
+
         if response.content in ["new", "modify"]:
             break
 
-        reg = "I am an assistant designed to schedule or modify existing restaurant reservations"
+        reg = "I am an assistant designed to schedule or modify "\
+            "existing restaurant reservations"
         print(reg)
-        state["query"] = input(">>> ")
 
     else:
 
