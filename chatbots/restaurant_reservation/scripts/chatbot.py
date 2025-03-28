@@ -23,9 +23,18 @@ def chatbot():
         openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
     )
 
-    current_timeframe = {'12AM': 'Booked', '1PM': 'Booked', '2PM': 'Available', '3PM': 'Available', '7PM': 'Available', '8PM': 'Available', '9PM': 'Available', '10PM': 'Available'}
-    workflow = StateGraph(State)
+    current_timeframe = {
+        '12AM': 'Booked',
+        '1PM': 'Booked',
+        '2PM': 'Available',
+        '3PM': 'Available',
+        '7PM': 'Available',
+        '8PM': 'Available',
+        '9PM': 'Available',
+        '10PM': 'Available',
+    }
 
+    workflow = StateGraph(State)
 
     workflow.add_node("greeting", greeting)
     workflow.add_node("initial", new_or_modify)
