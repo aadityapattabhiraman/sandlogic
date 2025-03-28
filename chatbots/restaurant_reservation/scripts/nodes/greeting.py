@@ -10,7 +10,10 @@ def greeting(state: State):
     A node that greets the user
     """
 
-    print("Hi. I am a assistant designed to schedule or modify existing",
-          "restaturant reservation.")
+    print(state["model"].invoke("""
+    You are a helpful AI assistant who is specialized in creating and
+    modifying the user restaurant reservation. Greet the user and ask
+    them what they would like to do.
+    """).content)
 
     return state

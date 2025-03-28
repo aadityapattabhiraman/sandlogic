@@ -1,4 +1,4 @@
-#!/home/akugyo/Programs/Python/chatbots/bin/python
+#!/usr/bin/env python3
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict

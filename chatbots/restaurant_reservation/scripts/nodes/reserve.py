@@ -90,7 +90,7 @@ def try_hotel_or_not(data: dict, model):
     pro = f"""
     You are a helpful assistant that is specialized in a restaurant suggestion
     Ask the user whether the user would like to try the {data["restaurant"]} restaurant or not.
-    If yes then respond only with "yes" else "no".
+    If they are interested to try the restaurant then respond only with "yes" or else "no".
     """
 
     prompt_template = ChatPromptTemplate([
@@ -153,6 +153,7 @@ def reserve(state: State):
     response = tavily_search(data, model)
     data = get_resto_name(response, data, model)
     resto_response = try_hotel_or_not(data, model)
+
     message = scheduling(state["current_timeframe"], history, scheduling_prompt, model)
     state["message"] = message
     state["data"] = data
