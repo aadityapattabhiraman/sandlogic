@@ -1,7 +1,7 @@
 #!/home/akugyo/Programs/Python/chatbots/bin/python
 
+from time import time
 from openai import OpenAI
-import os
 
 class LLM:
     def __init__(self):
@@ -19,6 +19,9 @@ class LLM:
 
 if __name__ == "__main__":
 
+    start = time()
     model = LLM()
-    prompt = [{"role": "user", "content": "Hello, I need help with a math problem."}]
+    prompt = [{"role": "user", "content": "Hello, who are you?"}]
     print(model.run(prompt))
+    end = time()
+    print(end - start)

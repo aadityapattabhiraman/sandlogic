@@ -21,6 +21,9 @@ def everything(state: State):
         response = state["model"].invoke(prompt)
         print(response.content)
 
+        if "<<DONE>>" in response.content:
+            break
+
         history.append(AIMessage(content=response.content))
         message = input(">>> ")
         history.append(HumanMessage(content=message))
